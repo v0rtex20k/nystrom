@@ -1,6 +1,7 @@
 import numpy as np
+import pandas as pd
 from typing import *
-from numpy.random.mtrand import seed
+from numpy.random import seed
 import  scipy.io as sio
 import numpy.linalg as nla
 import scipy.linalg as sla
@@ -20,13 +21,12 @@ def plot_clustering(data: np.ndarray, true_labels: np.ndarray,
 
     for ki in range(utls.size):
         p, t = data[pred_labels==upls[ki],:], data[true_labels==utls[ki],:]
-        a[0].scatter(t[:,0], t[:,1],c=cs[ki],s=0.5, marker='.')
-        a[1].scatter(p[:,0], p[:,1], c=cs[ki],s=0.5, marker='.')
+        a[0].scatter(t[:,0], t[:,1],c=cs[ki],s=5, marker='.')
+        a[1].scatter(p[:,0], p[:,1], c=cs[ki],s=5, marker='.')
     
     a[0].set_title('Original Clustering')
     a[1].set_title("Nystrom Clustering")
     a[1].scatter(centers[:,0], centers[:,1], c='r',s=25, marker='x')
-    # a[0].scatter(data[:,1], data[:,0],c='c',s=5,zorder=-1, marker='.')
     mplt.subplots_adjust(hspace=1, wspace=1); mplt.show()
 
 Cluster = NewType("Relevant stats from KMeans", Tuple[np.ndarray, np.ndarray, float])
@@ -79,8 +79,8 @@ def ng_nystrom(X: np.ndarray, k: int, gamma: int = 1, seed: int=None)-> Cluster:
     D = np.diag(1/np.sqrt(np.sum(A_hat, axis=1)))
     vals, vecs = nla.eig(D@A_hat@D)
     Y = vecs[:, np.argsort(vals)[-k:]]
-    Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (2,1)).T
-    km = KMeans(n_clusters=k, random_state=seed).fit(Y)
+    Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (k,1)).T
+    km = KMeans(n_clusters=k, random_state=seed).fit(D)
     return (km.labels_.flatten(), km.cluster_centers_.reshape(-1,k), km.inertia_)
 
 
@@ -119,20 +119,56 @@ def fast_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed
     UUt, EUt, _ = nla.svd(U_tilde)
     EUt[EUt <= 1e-6] = 0
     Y = np.real(UUt[:, np.argsort(EUt[EUt > 0])[:np.count_nonzero(EUt == 0) + k]])
-    Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (2,1)).T
+    Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (k,1)).T
     km = KMeans(n_clusters=k, random_state=seed).fit(Y)
     return (km.labels_.flatten(), km.cluster_centers_.reshape(-1,k), km.inertia_)
 
-def freq(v: np.ndarray)->Tuple[Any, float]:
-    return np.asarray(np.unique(predicted_labels, return_counts=True)).T
+def freq(v: np.ndarray)->Tuple[Any, float]: # utility function
+    return np.asarray(np.unique(v, return_counts=True)).T
+
+def load_data(name: str)-> Dict[str, Any]:
+    try: 
+        data_sources = {
+            "moon": {"data": sio.loadmat('Moon.mat')['x'],
+                    "original_labels": sio.loadmat('Moon_Label.mat')['y'].flatten(),
+                    "n_clusters": 2, "sample_size": 275, "expected_rank": 275
+                    },
+            "circ": {"data": sio.loadmat('concentric_circles_label.mat')['X'],
+                    "original_labels": sio.loadmat('concentric_circles.mat')['labels'].flatten(),
+                    "n_clusters": 3, "sample_size": 25, "expected_rank": 25
+                    },
+            "cali": {"data": pd.read_csv("housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy(),
+                    "original_labels": KMeans(n_clusters=6).fit_predict(pd.read_csv("housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy()),
+                    "n_clusters": 6, "sample_size": 5000, "expected_rank": 5000
+                    }
+        }
+        name = name.lower()
+        if name in data_sources.keys():
+            data = data_sources[name]
+            print(f'Loading \"{name}\" dataset {data["data"].shape}')
+            return data
+        raise FileNotFoundError
+    except FileNotFoundError:
+        print(f"Could not find \"{name}\" dataset"); exit()
+
+'''
+TODO:
+
+    - Take advantage of sparsity using scipy's sparse library to speed things up
+    - Parallelize SVDs? If possible
+    - Figure out how to do that wavelet transformation thing that maps images to
+      a new basis which makes it very sparse ()
+'''
+
 
 if __name__ == "__main__":
-    data, n_clusters = sio.loadmat('Moon.mat')['x'], 2
-    original_labels = sio.loadmat('Moon_Label.mat')['y'].flatten()
-    sample_size, expected_rank = 275, 275
-    # predicted_labels, centroids, I = ng_nystrom(data, n_clusters, seed=17)
-    predicted_labels, centroids, I = fast_nystrom(data, sample_size, expected_rank, n_clusters, seed=17)
+    data = load_data("cali")
+
+    # predicted_labels, centroids, I = standard_nystrom(data, sample_size, expected_rank, n_clusters, seed=17)
+    #predicted_labels, centroids, I = ng_nystrom(data["data"], data["n_clusters"], seed=17)
+    predicted_labels, centroids, I = fast_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
 
     freq(predicted_labels)
 
-    plot_clustering(data, original_labels, predicted_labels, centroids)
+    plot_clustering(data["data"], data["original_labels"], predicted_labels, centroids)
+    
