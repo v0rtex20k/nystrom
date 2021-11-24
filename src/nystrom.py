@@ -153,11 +153,10 @@ def load_data(name: str)-> Dict[str, Any]:
 
 '''
 TODO:
-
     - Take advantage of sparsity using scipy's sparse library to speed things up
     - Parallelize SVDs? If possible
     - Figure out how to do that wavelet transformation thing that maps images to
-      a new basis which makes it very sparse ()
+      a new basis which makes it very sparse
 '''
 
 
