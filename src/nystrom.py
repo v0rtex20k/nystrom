@@ -58,7 +58,7 @@ def standard_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, 
     km = KMeans(n_clusters=k, random_state=seed).fit(C@M)
     return (km.labels_.flatten(), km.cluster_centers_.reshape(-1,k), km.inertia_)
 
-def ng_nystrom(X: np.ndarray, k: int, gamma: int = 1, seed: int=None)-> Cluster:
+def ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Cluster:
     '''
     Nystrom k-Clustering of X (Ng et al. 2001)
 
@@ -83,6 +83,30 @@ def ng_nystrom(X: np.ndarray, k: int, gamma: int = 1, seed: int=None)-> Cluster:
     km = KMeans(n_clusters=k, random_state=seed).fit(D)
     return (km.labels_.flatten(), km.cluster_centers_.reshape(-1,k), km.inertia_)
 
+def sparse_ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Cluster:
+    '''
+    Nystrom k-Clustering of X (Ng et al. 2001)
+
+            Parameters:
+                    X (ndarray): An (m x n) dataset, where it is assumed m >> n
+                    k (int): Number of expected clusters
+                    seed (int): Random seed for sampling - default is None
+
+            Returns:
+                    labels (ndarray): k-Clustering label array of shape (m x n)
+                    centroids (ndarray): Coordinates of cluster centroids (k x 2)
+                    inertia (float): Inertia score of clustering
+    '''
+    if X.shape[1] > X.shape[0]: X = X.T
+    np.random.seed(seed); m = X.shape[0]
+    d = squareform(pdist(X))
+    A_hat = rbf_kernel(d,d,gamma=gamma)
+    D = np.diag(1/np.sqrt(np.sum(A_hat, axis=1)))
+    vals, vecs = nla.eig(D@A_hat@D)
+    Y = vecs[:, np.argsort(vals)[-k:]]
+    Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (k,1)).T
+    km = KMeans(n_clusters=k, random_state=seed).fit(D)
+    return (km.labels_.flatten(), km.cluster_centers_.reshape(-1,k), km.inertia_)
 
 def fast_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed: int=None)-> Cluster:
     '''
@@ -176,4 +200,3 @@ if __name__ == "__main__":
     print(freq(predicted_labels))
 
     plot_clustering(data["data"], data["original_labels"], predicted_labels, centroids)
-    
