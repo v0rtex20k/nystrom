@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
 from typing import *
-from numpy.random import seed
 import  scipy.io as sio
 import numpy.linalg as nla
 import scipy.linalg as sla
+from numpy.random import seed
+from image_compression import *
 import matplotlib.pyplot as mplt
 from sklearn.cluster import KMeans
 import scipy.sparse.linalg as ssla
@@ -83,31 +84,6 @@ def ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Clust
     km = KMeans(n_clusters=k, random_state=seed).fit(D)
     return (km.labels_.flatten(), km.cluster_centers_.reshape(-1,k), km.inertia_)
 
-def sparse_ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Cluster:
-    '''
-    Nystrom k-Clustering of X (Ng et al. 2001)
-
-            Parameters:
-                    X (ndarray): An (m x n) dataset, where it is assumed m >> n
-                    k (int): Number of expected clusters
-                    seed (int): Random seed for sampling - default is None
-
-            Returns:
-                    labels (ndarray): k-Clustering label array of shape (m x n)
-                    centroids (ndarray): Coordinates of cluster centroids (k x 2)
-                    inertia (float): Inertia score of clustering
-    '''
-    if X.shape[1] > X.shape[0]: X = X.T
-    np.random.seed(seed); m = X.shape[0]
-    d = squareform(pdist(X))
-    A_hat = rbf_kernel(d,d,gamma=gamma)
-    D = np.diag(1/np.sqrt(np.sum(A_hat, axis=1)))
-    vals, vecs = nla.eig(D@A_hat@D)
-    Y = vecs[:, np.argsort(vals)[-k:]]
-    Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (k,1)).T
-    km = KMeans(n_clusters=k, random_state=seed).fit(D)
-    return (km.labels_.flatten(), km.cluster_centers_.reshape(-1,k), km.inertia_)
-
 def fast_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed: int=None)-> Cluster:
     '''
     Fast Nystrom k-Clustering of X (Choromanska et al. 2013)
@@ -153,16 +129,16 @@ def freq(v: np.ndarray)->Tuple[Any, float]: # utility function
 def load_data(name: str, subsample: int=None)-> Dict[str, Any]:
     try: 
         data_sources = {
-            "moon": {"data": sio.loadmat('Moon.mat')['x'],
-                    "original_labels": sio.loadmat('Moon_Label.mat')['y'].flatten(),
+            "moon": {"data": sio.loadmat('../data/Moon.mat')['x'],
+                    "original_labels": sio.loadmat('../data/Moon_Label.mat')['y'].flatten(),
                     "n_clusters": 2, "sample_size": 275, "expected_rank": 275
                     },
-            "circ": {"data": sio.loadmat('concentric_circles_label.mat')['X'],
-                    "original_labels": sio.loadmat('concentric_circles.mat')['labels'].flatten(),
+            "circ": {"data": sio.loadmat('../data/concentric_circles_label.mat')['X'],
+                    "original_labels": sio.loadmat('../data/concentric_circles.mat')['labels'].flatten(),
                     "n_clusters": 3, "sample_size": 25, "expected_rank": 25
                     },
-            "cali": {"data": pd.read_csv("housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy(),
-                    "original_labels": KMeans(n_clusters=6).fit_predict(pd.read_csv("housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy()),
+            "cali": {"data": pd.read_csv("../data/housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy(),
+                    "original_labels": KMeans(n_clusters=6).fit_predict(pd.read_csv("../data/housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy()),
                     "n_clusters": 6, "sample_size": 1000, "expected_rank": 1000
                     }
         }
@@ -178,8 +154,7 @@ def load_data(name: str, subsample: int=None)-> Dict[str, Any]:
             return data
         raise FileNotFoundError
 
-    except FileNotFoundError:
-        print(f"Could not find \"{name}\" dataset"); exit()
+    except FileNotFoundError: print(f"Could not find \"{name}\" dataset"); exit()
 
 '''
 TODO:
