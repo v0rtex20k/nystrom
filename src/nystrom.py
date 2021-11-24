@@ -26,7 +26,7 @@ def plot_clustering(data: np.ndarray, true_labels: np.ndarray,
     
     a[0].set_title('Original Clustering')
     a[1].set_title("Nystrom Clustering")
-    a[1].scatter(centers[:,0], centers[:,1], c='r',s=25, marker='x')
+    # a[1].scatter(centers[:,0], centers[:,1], c='r',s=25, marker='x')
     mplt.subplots_adjust(hspace=1, wspace=1); mplt.show()
 
 Cluster = NewType("Relevant stats from KMeans", Tuple[np.ndarray, np.ndarray, float])
@@ -126,7 +126,7 @@ def fast_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed
 def freq(v: np.ndarray)->Tuple[Any, float]: # utility function
     return np.asarray(np.unique(v, return_counts=True)).T
 
-def load_data(name: str)-> Dict[str, Any]:
+def load_data(name: str, subsample: int=None)-> Dict[str, Any]:
     try: 
         data_sources = {
             "moon": {"data": sio.loadmat('Moon.mat')['x'],
@@ -139,15 +139,21 @@ def load_data(name: str)-> Dict[str, Any]:
                     },
             "cali": {"data": pd.read_csv("housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy(),
                     "original_labels": KMeans(n_clusters=6).fit_predict(pd.read_csv("housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy()),
-                    "n_clusters": 6, "sample_size": 5000, "expected_rank": 5000
+                    "n_clusters": 6, "sample_size": 1000, "expected_rank": 1000
                     }
         }
         name = name.lower()
         if name in data_sources.keys():
             data = data_sources[name]
             print(f'Loading \"{name}\" dataset {data["data"].shape}')
+            if subsample is not None:
+                np.random.seed(19); m = data["data"].shape[0]
+                sample_idxs = np.random.choice(m, 2500, replace=False)
+                data["data"] = data["data"][sample_idxs,:]
+                data["original_labels"] = data["original_labels"][sample_idxs]
             return data
         raise FileNotFoundError
+
     except FileNotFoundError:
         print(f"Could not find \"{name}\" dataset"); exit()
 
@@ -161,13 +167,13 @@ TODO:
 
 
 if __name__ == "__main__":
-    data = load_data("cali")
+    data = load_data("cali", subsample=2500)
 
-    # predicted_labels, centroids, I = standard_nystrom(data, sample_size, expected_rank, n_clusters, seed=17)
-    #predicted_labels, centroids, I = ng_nystrom(data["data"], data["n_clusters"], seed=17)
+    # predicted_labels, centroids, I = ng_nystrom(data["data"], data["n_clusters"], seed=17)
+    # predicted_labels, centroids, I = standard_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
     predicted_labels, centroids, I = fast_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
 
-    freq(predicted_labels)
+    print(freq(predicted_labels))
 
     plot_clustering(data["data"], data["original_labels"], predicted_labels, centroids)
     
