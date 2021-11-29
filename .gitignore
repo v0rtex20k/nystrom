@@ -10,6 +10,9 @@
 *.rar
 *.tar
 *.zip
+*.png
+*.mov
+*.jpg
 
 # OS generated files #
 ######################
