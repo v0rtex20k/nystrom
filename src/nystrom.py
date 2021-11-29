@@ -1,18 +1,17 @@
 import numpy as np
-import pandas as pd
-from typing import *
-import  scipy.io as sio
 import numpy.linalg as nla
+
+import  scipy.io as sio
 import scipy.linalg as sla
-from numpy.random import seed
-from image_compression import *
+from scipy.spatial.distance import squareform, pdist
+
 import matplotlib.pyplot as mplt
-from sklearn.cluster import KMeans
-import scipy.sparse.linalg as ssla
-from scipy.sparse import dia_matrix
 import matplotlib.colors as mcolors
+
+from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import rbf_kernel
-from scipy.spatial.distance import cdist, squareform, pdist
+
+from typing import *
 
 def plot_clustering(data: np.ndarray, true_labels: np.ndarray, 
                     pred_labels: np.ndarray, centers: np.ndarray)-> None:
@@ -126,7 +125,7 @@ def fast_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed
 def freq(v: np.ndarray)->Tuple[Any, float]: # utility function
     return np.asarray(np.unique(v, return_counts=True)).T
 
-def load_data(name: str, subsample: int=None)-> Dict[str, Any]:
+def load_sample_data(name: str, subsample: int=None)-> Dict[str, Any]:
     try: 
         data_sources = {
             "moon": {"data": sio.loadmat('../data/Moon.mat')['x'],
@@ -156,17 +155,8 @@ def load_data(name: str, subsample: int=None)-> Dict[str, Any]:
 
     except FileNotFoundError: print(f"Could not find \"{name}\" dataset"); exit()
 
-'''
-TODO:
-    - Take advantage of sparsity using scipy's sparse library to speed things up
-    - Parallelize SVDs? If possible
-    - Figure out how to do that wavelet transformation thing that maps images to
-      a new basis which makes it very sparse
-'''
-
-
 if __name__ == "__main__":
-    data = load_data("cali", subsample=2500)
+    data = load_sample_data("cali", subsample=2500)
 
     # predicted_labels, centroids, I = ng_nystrom(data["data"], data["n_clusters"], seed=17)
     # predicted_labels, centroids, I = standard_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
