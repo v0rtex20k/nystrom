@@ -31,7 +31,7 @@ def compress(X: np.ndarray, sample_size: int=None, wavelet_name: str='haar', see
     if m < n: X = X.T
     np.random.seed(seed)
     idxs = np.random.choice(m, m if sample_size is None else sample_size)
-    return np.apply_along_axis(lambda r: pywt.wavedec2(r.reshape(28,28), wavelet_name)[0].flatten(), 1, X[idxs,:]), idxs.flatten()
+    return np.apply_along_axis(lambda r: pywt.wavedec(r, wavelet_name)[0].flatten(), 1, X[idxs,:]), idxs.flatten()
 
 def decompress(coeffs: np.ndarray, wavelet_name: str='haar')-> np.ndarray:
     '''
@@ -90,6 +90,7 @@ def counts(preds: np.ndarray, trues: np.ndarray, idxs: np.ndarray, nbins: int=10
     
     for k,v in bin_dict.items():
         tot = sum(v.values())
+        if tot == 0: continue
         for l,w in v.items():
             bin_dict[k][l] /= tot
 
@@ -102,12 +103,12 @@ if __name__ == "__main__":
     data = data/255
     # data[data > 0] = 1
     print('\tCompressing MNIST...')
-    mnist_sample, sample_idxs = compress(data, sample_size=1000, seed=17)
-    # mnist_sample, sample_idxs = hotspots(data, sample_size=1000, seed=17)
+    #mnist_sample, sample_idxs = compress(data, sample_size=1000, seed=17)
+    mnist_sample, sample_idxs = hotspots(data, sample_size=1000, seed=17)
     print('\tClustering MNIST...')
-    nbins = 5
-    pred_labels = ng_nystrom(mnist_sample,nbins,seed=17)# fast_nystrom(mnist_sample, 100, 100, 11, seed=17)
-    # pred_labels = ng_nystrom(mnist_sample, 10, seed=17)
+    nbins = 10
+    pred_labels = ng_nystrom(mnist_sample,nbins,seed=17)
+    # pred_labels = fast_nystrom(mnist_sample, 750, 750, 500, seed=17)
     print('\tAssessing performance and saving results...')
     with open('counts.json', 'w') as cp:
         json.dump(counts(pred_labels, true_labels, sample_idxs, nbins), cp, indent=4)

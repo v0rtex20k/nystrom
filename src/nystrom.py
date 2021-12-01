@@ -8,7 +8,7 @@ from scipy.spatial.distance import squareform, pdist
 import matplotlib.pyplot as mplt
 import matplotlib.colors as mcolors
 
-from sklearn.cluster import SpectralClustering
+from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics.pairwise import rbf_kernel
 
 from typing import *
@@ -29,7 +29,7 @@ def plot_clustering(data: np.ndarray, true_labels: np.ndarray, pred_labels: np.n
     a[1].set_title("Nystrom Clustering")
     mplt.subplots_adjust(hspace=1, wspace=1); mplt.show()
 
-Cluster = NewType("Relevant stats from SpectralClustering", Tuple[np.ndarray, np.ndarray, float])
+Cluster = NewType("Relevant stats from MiniBatchKMeans", Tuple[np.ndarray, np.ndarray, float])
 def standard_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed: int=None)-> Cluster:
     '''
     Standard Nystrom k-Clustering of X
@@ -56,8 +56,8 @@ def standard_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, 
 
     M = U[:,:k]@np.diag(1/(np.sqrt(E[:k]) + EPSILON))
     C = rbf_kernel(X, X_sample, gamma=gamma)
-    sc = SpectralClustering(n_clusters=k, assign_labels='discretize', random_state=seed).fit(C@M)
-    return sc.labels_.flatten()# , sc.cluster_centers_.reshape(-1,k), sc.inertia_)
+    mbk = MiniBatchKMeans(n_clusters=k, random_state=seed).fit(C@M)
+    return mbk.labels_.flatten()# , mbk.cluster_centers_.reshape(-1,k), mbk.inertia_)
 
 def ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Cluster:
     '''
@@ -80,10 +80,10 @@ def ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Clust
     A_hat = rbf_kernel(d,d,gamma=gamma)
     D = np.diag(1/(np.sqrt(np.sum(A_hat, axis=1)) + EPSILON))
     vals, vecs = nla.eig(D@A_hat@D)
-    Y = vecs[:, np.argsort(vals)[-k:]]
+    Y = np.real(vecs[:, np.argsort(vals)[-k:]])
     Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (k,1)).T + EPSILON
-    sc = SpectralClustering(n_clusters=k, assign_labels='discretize', random_state=seed).fit(D)
-    return sc.labels_.flatten() # , sc.cluster_centers_.reshape(-1,k), sc.inertia_)
+    mbk = MiniBatchKMeans(n_clusters=k, random_state=seed).fit(Y)
+    return mbk.labels_.flatten() # , mbk.cluster_centers_.reshape(-1,k), mbk.inertia_)
 
 def fast_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed: int=None)-> Cluster:
     '''
@@ -121,9 +121,9 @@ def fast_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed
     UUt, EUt, _ = nla.svd(U_tilde)
     EUt[EUt <= 1e-6] = 0
     Y = np.real(UUt[:, np.argsort(EUt[EUt > 0])[:np.count_nonzero(EUt == 0) + k]])
-    Y = Y / np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (k,1)).T + EPSILON
-    sc = SpectralClustering(n_clusters=k, assign_labels='discretize', random_state=seed).fit(Y)
-    return sc.labels_.flatten() # , sc.cluster_centers_.reshape(-1,k), sc.inertia_)
+    Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (k,1)).T + EPSILON
+    mbk = MiniBatchKMeans(n_clusters=k, random_state=seed).fit(Y)
+    return mbk.labels_.flatten() # , mbk.cluster_centers_.reshape(-1,k), mbk.inertia_)
 
 def freq(v: np.ndarray)->Tuple[Any, float]: # utility function
     return np.asarray(np.unique(v, return_counts=True)).T
@@ -140,7 +140,7 @@ def load_sample_data(name: str, subsample: int=None)-> Dict[str, Any]:
                     "n_clusters": 3, "sample_size": 25, "expected_rank": 25
                     },
             "cali": {"data": pd.read_csv("../data/housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy(),
-                    "original_labels": SpectralClustering(n_clusters=6,  assign_labels='discretize').fit_predict(pd.read_csv("../data/housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy()),
+                    "original_labels": MiniBatchKMeans(n_clusters=6).fit_predict(pd.read_csv("../data/housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy()),
                     "n_clusters": 6, "sample_size": 1000, "expected_rank": 1000
                     }
         }
