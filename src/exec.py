@@ -1,4 +1,7 @@
+from functools import partial
 import json
+import re
+from numpy.random import gamma, seed
 import pywt
 import numpy as np
 import pandas as pd
@@ -8,8 +11,16 @@ from sklearn.utils import Bunch
 from nystrom import *
 from sklearn.datasets import fetch_openml
 
+import dask.array as da
+import dask.bag as db
+
+from timeit import default_timer as timer
+from datetime import datetime as dt
+from datetime import timedelta
+
 import warnings
 warnings.filterwarnings('ignore')
+
 
 def compress(X: np.ndarray, sample_size: int=None, wavelet_name: str='haar', seed: int=None)-> Tuple[np.ndarray, np.ndarray]:
     '''
@@ -81,7 +92,7 @@ def accuracy(preds: np.ndarray, trues: np.ndarray)-> float:
     
 def counts(preds: np.ndarray, trues: np.ndarray, idxs: np.ndarray, nbins: int=10)-> float:
     bin_dict = {}
-    for i in range(nbins):
+    for i in range(nbins): # true label of 0
         bin_idxs = np.argwhere(trues.flatten()[idxs] == i).flatten()
         cdict = {}
         for j in range(nbins):
@@ -96,22 +107,23 @@ def counts(preds: np.ndarray, trues: np.ndarray, idxs: np.ndarray, nbins: int=10
 
     return bin_dict
 
+
+dur = lambda a,b: timedelta(seconds=b-a)
 if __name__ == "__main__":
     print('\tLoading MNIST...')
     mnist_bunch: Bunch = fetch_openml(name='mnist_784', version='1')
     data, true_labels = [mnist_bunch[c].to_numpy(dtype=int, na_value=0) for c in ['data', 'target']]
-    data = data/255
-    # data[data > 0] = 1
-    print('\tCompressing MNIST...')
-    #mnist_sample, sample_idxs = compress(data, sample_size=1000, seed=17)
-    mnist_sample, sample_idxs = hotspots(data, sample_size=1000, seed=17)
-    print('\tClustering MNIST...')
+    data = data/255 # data.shape == (70000, 784)
+
     nbins = 10
-    pred_labels = ng_nystrom(mnist_sample,nbins,seed=17)
-    # pred_labels = fast_nystrom(mnist_sample, 750, 750, 500, seed=17)
-    print('\tAssessing performance and saving results...')
-    with open('counts.json', 'w') as cp:
-        json.dump(counts(pred_labels, true_labels, sample_idxs, nbins), cp, indent=4)
-    # all_labels = np.stack((predicted_labels.flatten(), true_labels.flatten()[sample_idxs]))
-    #print(all_labels)
-    # print(f'\tAccuracy: {accuracy(predicted_labels, true_labels)}%')
+    for n in [1000, 2000, 4000]:
+        mnist_sample, sample_idxs = hotspots(data, sample_size=n, seed=17)
+        print(f'\tClustering MNIST w/ {n}...')
+        start = timer()
+        pred_labels = sparse_ng_nystrom(mnist_sample, k=nbins, gamma=None, seed=17)
+        end = timer()
+        print(f"NYSTROM w/ {pred_labels.shape} COMPLETED IN {dur(start, end).seconds} SECONDS")
+        
+        print('\tAssessing performance and saving results...')
+        with open(f'sparse-counts-{n}.json', 'w') as cp:
+            json.dump(counts(pred_labels, true_labels, sample_idxs, nbins), cp, indent=4)

@@ -1,19 +1,24 @@
+import os
 import numpy as np
 import pandas as pd
 import  scipy.io as sio
 import numpy.linalg as nla
 import scipy.linalg as sla
+from scipy.sparse.csc import csc_matrix
+from scipy.sparse.csr import csr_matrix
+from scipy.sparse.dia import dia_matrix
 from scipy.spatial.distance import squareform, pdist
 
 import matplotlib.pyplot as mplt
 import matplotlib.colors as mcolors
 
-from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.cluster import *
 
 from typing import *
 
-EPSILON = 1e-10 # avoid DivideByZero errors
+NUM_CORES = os.cpu_count()
+EPSILON   = 1e-10 # avoid DivideByZero errors
 
 def plot_clustering(data: np.ndarray, true_labels: np.ndarray, pred_labels: np.ndarray)-> None:
     utls , upls = np.unique(true_labels), np.unique(pred_labels)
@@ -59,6 +64,41 @@ def standard_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, 
     mbk = MiniBatchKMeans(n_clusters=k, random_state=seed).fit(C@M)
     return mbk.labels_.flatten()# , mbk.cluster_centers_.reshape(-1,k), mbk.inertia_)
 
+# import asyncio
+# def background(f):
+#     def wrapped(*args, **kwargs):
+#         runnable = partial(f, *args, **kwargs)
+#         return asyncio.get_event_loop().run_in_executor(None, runnable)
+
+#     return wrapped
+
+# @background
+import scipy.sparse as sparse
+from scipy.sparse.linalg import eigs
+def sparse_ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> np.ndarray:
+    '''
+    SPARSE Nystrom k-Clustering of X (Ng et al. 2001)
+
+            Parameters:
+                    X (ndarray): An (m x n) dataset, where it is assumed m >> n
+                    k (int): Number of expected clusters
+                    seed (int): Random seed for sampling - default is None
+
+            Returns:
+                    labels (ndarray): k-Clustering label array of shape (m x n)
+    '''
+    global EPSILON
+    if X.shape[1] > X.shape[0]: X = X.T
+    np.random.seed(seed)
+    d = squareform(pdist(X))
+    A_hat =  rbf_kernel(d,d,gamma=gamma)
+    dvals: np.ndarray = 1/(np.sqrt(np.sum(A_hat, axis=1)) + EPSILON)
+    D: dia_matrix = sparse.dia_matrix((dvals.T, np.zeros(1)), shape=(dvals.size, dvals.size))
+    vecs = np.real(eigs((D*A_hat*D), k=k, which='LM')[1])
+    Y = vecs / (np.tile(np.sqrt(np.sum(np.square(vecs), axis=1)), (k,1)).T + EPSILON)
+    mbk = SpectralClustering(n_clusters=k, random_state=seed, n_jobs=-1, degree=17, affinity="polynomial").fit(sparse.csr_matrix(Y))
+    return mbk.labels_.flatten()
+
 def ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Cluster:
     '''
     Nystrom k-Clustering of X (Ng et al. 2001)
@@ -75,7 +115,7 @@ def ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Clust
     '''
     global EPSILON
     if X.shape[1] > X.shape[0]: X = X.T
-    np.random.seed(seed); m = X.shape[0]
+    np.random.seed(seed)
     d = squareform(pdist(X))
     A_hat = rbf_kernel(d,d,gamma=gamma)
     D = np.diag(1/(np.sqrt(np.sum(A_hat, axis=1)) + EPSILON))

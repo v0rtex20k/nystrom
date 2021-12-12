@@ -1,6 +1,28 @@
 # Nystrom Clustering
 Final Project for MATH123 in Tufts MSCS Fall 2021
 
+### Notes 12/1/21
+* Huge breakthrough! Found crippling typos which have since been removed
+* KMeans performs significantly worse than MiniBatchKmeans and SpectralClustering
+* I think it works? Still needs tuning obv
+* Fast Nystrom seems unpredictable, ng much more consistent
+* compress with wavedec2 doesn't help, wavedec also mediocre. 
+* MiniBatch seems like the best
+* SpectralClustering discretize > kmeans
+* **Overall** : hotspots + ng + mini is best
+### Notes 11/30/21
+* After speaking with Prof. Tassisa, will try progressively larger fractions
+  of MNIST dataset - cluster numbers together, check performance
+* Hyperspectral images? If time permits
+
+* Looks like compressing with wavedec2(a_28_by_28_image, 'haar') does not perform well -
+  it basically randomly guesses. 
+* Same with wavedec1
+* Performance does not improve with one hot encoding of both
+* It's actually pretty sparse as is - passing directly does not help
+* Spectral Clustering does not help
+* Scaling by 255 does not help
+
 ### Notes 11/24/21
 * Now, all methods are mostly functional, with some loss upon decompress
 * It seems most of the relevant edges/information can be found in

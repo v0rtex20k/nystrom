@@ -13,6 +13,7 @@
 *.png
 *.mov
 *.jpg
+*.json
 
 # OS generated files #
 ######################
@@ -23,3 +24,10 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+**/__pycache__/**
+__pycache__/**
+
+#   Custom Prepends  #
+######################
+[tT]est__*
+*counts*.*
