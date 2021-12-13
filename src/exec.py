@@ -1,5 +1,6 @@
 from functools import partial
 import json
+from math import ceil
 import re
 from numpy.random import gamma, seed
 import pywt
@@ -21,6 +22,7 @@ from datetime import timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
+from sklearn.feature_selection import mutual_info_classif
 
 def compress(X: np.ndarray, sample_size: int=None, wavelet_name: str='haar', seed: int=None)-> Tuple[np.ndarray, np.ndarray]:
     '''
@@ -62,7 +64,7 @@ def decompress(coeffs: np.ndarray, wavelet_name: str='haar')-> np.ndarray:
     '''
     return np.apply_along_axis(lambda r: pywt.waverec2(r.reshape(28,28), wavelet_name)[0], 1, coeffs)
 
-def hotspots(X: np.ndarray, sample_size: int=1000, seed:int = None)-> np.ndarray:
+def sample(X: np.ndarray, sample_size: int=1000, seed:int = None)-> np.ndarray:
     '''
         Samples and compresses the data using simple one-hot encodings to speed up clustering
 
@@ -93,7 +95,7 @@ def accuracy(preds: np.ndarray, trues: np.ndarray)-> float:
 def counts(preds: np.ndarray, trues: np.ndarray, idxs: np.ndarray, nbins: int=10)-> float:
     bin_dict = {}
     for i in range(nbins): # true label of 0
-        bin_idxs = np.argwhere(trues.flatten()[idxs] == i).flatten()
+        bin_idxs = np.argwhere(trues.flatten()[idxs].flatten() == i).flatten()
         cdict = {}
         for j in range(nbins):
             cdict[j] = np.count_nonzero(preds[bin_idxs] == j)
@@ -107,23 +109,59 @@ def counts(preds: np.ndarray, trues: np.ndarray, idxs: np.ndarray, nbins: int=10
 
     return bin_dict
 
+def most_important_pixels(data: np.ndarray, labels: np.ndarray, pkeep: float=0.1, seed:int = None)-> np.ndarray:
+    n, mi = data.shape[1], mutual_info_classif(data, labels, random_state=seed)
+    mask = pd.Series(mi, np.arange(n)).fillna(0).rank(ascending=False)
+    mask = mask.replace(mask.max(),n).to_numpy()
+    ranks, cutoff = np.argsort(mask), int(abs(pkeep)*n) if 0 <= abs(pkeep) <= 1 else int(abs(pkeep))
+    mask[ranks[cutoff:]], mask[ranks[:cutoff]] = False, True
+    return mask.astype(bool).flatten()
 
 dur = lambda a,b: timedelta(seconds=b-a)
 if __name__ == "__main__":
     print('\tLoading MNIST...')
     mnist_bunch: Bunch = fetch_openml(name='mnist_784', version='1')
-    data, true_labels = [mnist_bunch[c].to_numpy(dtype=int, na_value=0) for c in ['data', 'target']]
-    data = data/255 # data.shape == (70000, 784)
+    data, true_labels = [mnist_bunch[c].to_numpy(dtype=int, na_value=0) for c in ['data', 'target']] # data.shape == (70000, 784)
+    print('\tTraining')
+    training_data, training_idxs = sample(data, sample_size=20000, seed=17)
+    testing_mask = np.ones(data.shape[0], dtype=bool)
+    testing_mask[training_idxs] = False
+    tick = timer()
+    mip_mask = most_important_pixels(training_data, true_labels[training_idxs].flatten(), pkeep=0.5)
+    tock = timer()
+    print(f"MIP MASK COMPUTED IN {dur(tick, tock).seconds} SECONDS")
 
-    nbins = 10
-    for n in [1000, 2000, 4000]:
-        mnist_sample, sample_idxs = hotspots(data, sample_size=n, seed=17)
+    print(testing_mask.ndim, mip_mask.ndim)
+
+    test_grid = np.ix_(testing_mask.flatten(), mip_mask.flatten())
+    print([g.shape for g in test_grid])
+    testing_data = data[test_grid]
+    testing_labels, nbins = true_labels[testing_mask].flatten(), 10
+    
+    from test__algos import *
+
+    testing_data = testing_data / 255
+    # for n in [500, 1000, 2000]:
+    #     test_sample, sample_idxs = sample(testing_data, sample_size=n, seed=17)
+    #     print(f'\tClustering MNIST w/ {n}...')
+    #     tick = timer()
+    #     #pred_labels = sparse_ng_nystrom(test_sample, k=nbins, gamma=None, seed=17)
+    #     pred_labels = fast_nystrom(test_sample, 60, 50, nbins, seed=17)
+    #     tock  = timer()
+    #     print(f"NYSTROM w/ {pred_labels.shape} COMPLETED IN {dur(tick, tock).seconds} SECONDS")
+
+    for n in [500, 1000, 2000]:
+        test_sample, sample_idxs = sample(testing_data, sample_size=n, seed=19)
         print(f'\tClustering MNIST w/ {n}...')
-        start = timer()
-        pred_labels = sparse_ng_nystrom(mnist_sample, k=nbins, gamma=None, seed=17)
-        end = timer()
-        print(f"NYSTROM w/ {pred_labels.shape} COMPLETED IN {dur(start, end).seconds} SECONDS")
-        
-        print('\tAssessing performance and saving results...')
-        with open(f'sparse-counts-{n}.json', 'w') as cp:
-            json.dump(counts(pred_labels, true_labels, sample_idxs, nbins), cp, indent=4)
+        tick = timer()
+        # cluster_test_labels, pred_labels = cluster1(test_sample, testing_labels[sample_idxs],
+        #                                  nbins, frac_train=0.5, split_seed=42, fit_seed=17)
+
+        print(test_sample.shape)
+        cluster_test_labels, pred_labels = cluster3(test_sample, test_sample.shape[1], test_sample.shape[1], testing_labels[sample_idxs], nbins, 
+                                                    frac_train=0.5, split_seed=71, fit_seed=17, verbose=True)
+        tock  = timer()
+        print(f"NYSTROM w/ {pred_labels.shape} COMPLETED IN {dur(tick, tock).seconds} SECONDS")
+        # print('\tAssessing performance and saving results...')
+        # with open(f'flipped-FAST-ALGO-counts-{n}.json', 'w') as cp:
+        #     json.dump(counts(pred_labels, cluster_test_labels, None, nbins), cp, indent=4)

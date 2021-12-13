@@ -10,29 +10,15 @@ from scipy.sparse.dia import dia_matrix
 from scipy.spatial.distance import squareform, pdist
 
 import matplotlib.pyplot as mplt
-import matplotlib.colors as mcolors
 
 from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.cluster import *
-
+from random import shuffle
 from typing import *
 
 NUM_CORES = os.cpu_count()
 EPSILON   = 1e-10 # avoid DivideByZero errors
 
-def plot_clustering(data: np.ndarray, true_labels: np.ndarray, pred_labels: np.ndarray)-> None:
-    utls , upls = np.unique(true_labels), np.unique(pred_labels)
-    all_colors = list(mcolors.get_named_colors_mapping().keys())
-    (fig , a), cs = mplt.subplots(2), all_colors[:utls.size]
-
-    for ki in range(utls.size):
-        p, t = data[pred_labels==upls[ki],:], data[true_labels==utls[ki],:]
-        a[0].scatter(t[:,0], t[:,1],c=cs[ki],s=5, marker='.')
-        a[1].scatter(p[:,0], p[:,1], c=cs[ki],s=5, marker='.')
-    
-    a[0].set_title('Original Clustering')
-    a[1].set_title("Nystrom Clustering")
-    mplt.subplots_adjust(hspace=1, wspace=1); mplt.show()
 
 Cluster = NewType("Relevant stats from MiniBatchKMeans", Tuple[np.ndarray, np.ndarray, float])
 def standard_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed: int=None)-> Cluster:
@@ -62,7 +48,7 @@ def standard_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, 
     M = U[:,:k]@np.diag(1/(np.sqrt(E[:k]) + EPSILON))
     C = rbf_kernel(X, X_sample, gamma=gamma)
     mbk = MiniBatchKMeans(n_clusters=k, random_state=seed).fit(C@M)
-    return mbk.labels_.flatten()# , mbk.cluster_centers_.reshape(-1,k), mbk.inertia_)
+    return mbk.labels_.flatten() # , mbk.cluster_centers_.reshape(-1,k), mbk.inertia_)
 
 # import asyncio
 # def background(f):
@@ -96,7 +82,7 @@ def sparse_ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-
     D: dia_matrix = sparse.dia_matrix((dvals.T, np.zeros(1)), shape=(dvals.size, dvals.size))
     vecs = np.real(eigs((D*A_hat*D), k=k, which='LM')[1])
     Y = vecs / (np.tile(np.sqrt(np.sum(np.square(vecs), axis=1)), (k,1)).T + EPSILON)
-    mbk = SpectralClustering(n_clusters=k, random_state=seed, n_jobs=-1, degree=17, affinity="polynomial").fit(sparse.csr_matrix(Y))
+    mbk = SpectralClustering(n_clusters=k, random_state=seed, n_jobs=-1, degree=17, affinity="polynomial").fit(Y) 
     return mbk.labels_.flatten()
 
 def ng_nystrom(X: np.ndarray, k: int, gamma: int = None, seed: int=None)-> Cluster:
@@ -141,28 +127,34 @@ def fast_nystrom(X: np.ndarray,  l: int, r: int, k: int, gamma: int = None, seed
                     centroids (ndarray): Coordinates of cluster centroids (k x 2)
                     inertia (float): Inertia score of clustering
     '''
+
+    # I think something is wrong here,
+    # but not sure exactly what. Focus on slides,
+    # then come back to try to fix
+
     global EPSILON
     if r > l: print("Rank cannot exceed than sample size"); return None
     if X.shape[1] > X.shape[0]: X = X.T
-    np.random.seed(seed); m = X.shape[0]
-    sample_idxs = np.random.choice(m, l, replace=False)
+    np.random.seed(seed); m,n = X.shape
+    sample_idxs = np.random.choice(n, l, replace=False)
 
-    X_sample = X[sample_idxs, :]
-    A_hat = rbf_kernel(X, X_sample, gamma=gamma)
+    dists = squareform(pdist(X[:, sample_idxs]))
+    A_hat = rbf_kernel(dists, dists, gamma=gamma)
 
     D = np.diag(1 / (np.sqrt(np.sum(A_hat, axis=1)) + EPSILON))
     d = np.diag(1 / (np.sqrt(np.sum(A_hat, axis=0)) + EPSILON))
-    C = (np.eye(m,l) - (np.sqrt(l/m) * (D @ A_hat @ d)))
+    C = (np.eye(m,l) - (np.sqrt(l/m) * (D @ A_hat @ d))[:,:l]) # (m x l)
     W = C[sample_idxs, :]
     UW, EW, VW = nla.svd(W)
     Wr = UW[:,:r]@np.diag(EW[:r])@VW[:r,:]
-    EWr, UWr = np.linalg.eig(Wr)
+    EWr, UWr = nla.eig(Wr.T@Wr)
+    print(C.shape, UWr.shape, nla.pinv(np.diag(EWr)).shape)
     U_tilde = (np.sqrt(l/m) * C@UWr@nla.pinv(np.diag(EWr)))
-    UUt, EUt, _ = nla.svd(U_tilde)
-    EUt[EUt <= 1e-6] = 0
-    Y = np.real(UUt[:, np.argsort(EUt[EUt > 0])[:np.count_nonzero(EUt == 0) + k]])
+    EUt, UUt = nla.eig(U_tilde.T@U_tilde)
+    Y = np.real(UUt[:, np.argsort(EUt)[-k:]]) # np.argsort(EUt[EUt > 0])[:np.count_nonzero(EUt == 0) + k]])
     Y /= np.tile(np.sqrt(np.sum(np.square(Y), axis=1)), (k,1)).T + EPSILON
-    mbk = MiniBatchKMeans(n_clusters=k, random_state=seed).fit(Y)
+    # mbk = MiniBatchKMeans(n_clusters=k, random_state=seed).fit(Y)
+    mbk = SpectralClustering(n_clusters=k, random_state=seed, n_jobs=-1).fit(Y) 
     return mbk.labels_.flatten() # , mbk.cluster_centers_.reshape(-1,k), mbk.inertia_)
 
 def freq(v: np.ndarray)->Tuple[Any, float]: # utility function
@@ -172,15 +164,15 @@ def load_sample_data(name: str, subsample: int=None)-> Dict[str, Any]:
     try: 
         data_sources = {
             "moon": {"data": sio.loadmat('../data/Moon.mat')['x'],
-                    "original_labels": sio.loadmat('../data/Moon_Label.mat')['y'].flatten(),
+                    "labels": sio.loadmat('../data/Moon_Label.mat')['y'].flatten(),
                     "n_clusters": 2, "sample_size": 275, "expected_rank": 275
                     },
             "circ": {"data": sio.loadmat('../data/concentric_circles_label.mat')['X'],
-                    "original_labels": sio.loadmat('../data/concentric_circles.mat')['labels'].flatten(),
+                    "labels": sio.loadmat('../data/concentric_circles.mat')['labels'].flatten(),
                     "n_clusters": 3, "sample_size": 25, "expected_rank": 25
                     },
             "cali": {"data": pd.read_csv("../data/housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy(),
-                    "original_labels": MiniBatchKMeans(n_clusters=6).fit_predict(pd.read_csv("../data/housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy()),
+                    "labels": MiniBatchKMeans(n_clusters=6).fit_predict(pd.read_csv("../data/housing.csv").loc[:, ["Latitude", "Longitude"]].to_numpy()),
                     "n_clusters": 6, "sample_size": 1000, "expected_rank": 1000
                     }
         }
@@ -190,21 +182,26 @@ def load_sample_data(name: str, subsample: int=None)-> Dict[str, Any]:
             print(f'Loading \"{name}\" dataset {data["data"].shape}')
             if subsample is not None:
                 np.random.seed(19); m = data["data"].shape[0]
-                sample_idxs = np.random.choice(m, 3*m//4, replace=False)
+                sample_idxs = np.random.choice(m, subsample, replace=False)
                 data["data"] = data["data"][sample_idxs,:]
-                data["original_labels"] = data["original_labels"][sample_idxs]
+                data["labels"] = data["labels"][sample_idxs]
             return data
         raise FileNotFoundError
 
     except FileNotFoundError: print(f"Could not find \"{name}\" dataset"); exit()
 
+
 if __name__ == "__main__":
-    data = load_sample_data("moon", subsample=2500)
+    data = load_sample_data("cali", subsample=1000)
+    
+    import test__algos
 
-    # predicted_labels, centroids, I = ng_nystrom(data["data"], data["n_clusters"], seed=17)
+    # test__algos.cluster1(data["data"], data["labels"], data["n_clusters"],
+    #                      frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+
+    test__algos.cluster3(data["data"], 2, 2, data["labels"], data["n_clusters"],
+                         frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+
+    # predicted_labels = ng_nystrom(data["data"], data["n_clusters"])
     # predicted_labels, centroids, I = standard_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
-    predicted_labels = fast_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
-
-    print(freq(predicted_labels))
-
-    plot_clustering(data["data"], data["original_labels"], predicted_labels)
+    # predicted_labels = fast_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
