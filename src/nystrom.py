@@ -199,8 +199,11 @@ if __name__ == "__main__":
     # test__algos.cluster1(data["data"], data["labels"], data["n_clusters"],
     #                      frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
 
-    test__algos.cluster3(data["data"], 2, 2, data["labels"], data["n_clusters"],
+    test__algos.cluster0(data["data"], 2, 2, data["labels"], data["n_clusters"],
                          frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+
+    # test__algos.cluster3(data["data"], 2, 2, data["labels"], data["n_clusters"],
+    #                      frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
 
     # predicted_labels = ng_nystrom(data["data"], data["n_clusters"])
     # predicted_labels, centroids, I = standard_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
