@@ -192,19 +192,22 @@ def load_sample_data(name: str, subsample: int=None)-> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    data = load_sample_data("cali", subsample=1000)
-    
-    import test__algos
+        data = load_sample_data("cali", subsample=5000)
 
-    # test__algos.cluster1(data["data"], data["labels"], data["n_clusters"],
-    #                      frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+        import test__algos
 
-    test__algos.cluster0(data["data"], 2, 2, data["labels"], data["n_clusters"],
-                         frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+        # test__algos.cluster1(data["data"], data["labels"], data["n_clusters"],
+        #                      frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
 
-    # test__algos.cluster3(data["data"], 2, 2, data["labels"], data["n_clusters"],
-    #                      frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+        test__algos.cluster0(data["data"], data["labels"], data["n_clusters"],
+                frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
 
-    # predicted_labels = ng_nystrom(data["data"], data["n_clusters"])
-    # predicted_labels, centroids, I = standard_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
-    # predicted_labels = fast_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
+        test__algos.cluster1(data["data"], data["labels"], data["n_clusters"],
+                frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+
+        test__algos.cluster3(data["data"], 500, 500, data["labels"], data["n_clusters"],
+                frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+
+        # predicted_labels = ng_nystrom(data["data"], data["n_clusters"])
+        # predicted_labels, centroids, I = standard_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
+        # predicted_labels = fast_nystrom(data["data"], data["sample_size"], data["expected_rank"], data["n_clusters"], seed=17)
