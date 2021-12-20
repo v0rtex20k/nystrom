@@ -39,6 +39,15 @@ def algo0(S: np.ndarray, k: int, action: str, clf: MBK=None, seed: int=None)-> U
         return clf.predict(np.real(S))
     else: exit(f"Invalid action {action}")
 
+def affinity(mat: np.ndarray, sigma: int=1)-> np.ndarray:
+    m = mat.shape[0]
+    aff =  np.zeros((m,m))
+    for i in range(m):
+        for j in range(m):
+            dist = np.sqrt(np.square(mat[i,0] - mat[j,0]) + np.square(mat[i,1] - mat[j,1]))
+            aff[i,j] = np.exp((-1 * dist)/(2*sigma**2))
+    return aff
+
 def algo1(S: np.ndarray, k: int, action: str, clf: MBK=None, style: str='ng', seed: int=None)-> Union[MBK, np.ndarray]:
     '''
         Params:
@@ -52,7 +61,7 @@ def algo1(S: np.ndarray, k: int, action: str, clf: MBK=None, style: str='ng', se
             - Fitted MultiBatchKMeans Classifier | predicted label array
     '''
     X: csr_matrix; global EPSILON
-    A: np.ndarray = rbf_kernel(S) # A ∊ R^(n x n)
+    A: np.ndarray = rbf_kernel(squareform(pdist(S))) # affinity(S) # A ∊ R^(n x n)
     np.fill_diagonal(A,0)
     dvals: np.ndarray = 1/(np.sqrt(np.sum(A, axis=1)) + EPSILON)
     d: dia_matrix = sparse.dia_matrix((dvals.T, np.zeros(1)), shape=(dvals.size, dvals.size)) # d ∊ R^(n x n)       
@@ -65,8 +74,8 @@ def algo1(S: np.ndarray, k: int, action: str, clf: MBK=None, style: str='ng', se
         X = np.real(ssl.eigs((L), k=k, which='SM')[1]) # X ∊ R^(n x k) --> k SMALLEST eigenvectors
 
     if action.lower() == "f" and clf is None:
-        return MBK(n_clusters=k,batch_size=300*NUM_CORES,random_state=seed).fit(np.real(X))
-    elif action.lower() == "p" and clf is not None: 
+        return KMeans(n_clusters=k,random_state=seed).fit(np.real(X)) # batch_size=300*NUM_CORES
+    elif action.lower() == "p" and clf is not None:
         return clf.predict(np.real(X))
     else: exit(f"Invalid action {action}")
 
@@ -93,26 +102,26 @@ def algo3(S: np.ndarray, l: int, r: int,  k: int, action: str, clf: MBK=None, se
     A: np.ndarray = A[:,col_idxs]; np.fill_diagonal(A,0)
     Dvals: np.ndarray = 1/(np.sqrt(np.sum(A, axis=1)) + EPSILON)
     dvals: np.ndarray = 1/(np.sqrt(np.sum(A, axis=0)) + EPSILON)
-    D: csc_matrix = sparse.csc_matrix(np.diag(Dvals)) # D ∊ R^(n x n)
-    d: csc_matrix = sparse.csc_matrix(np.diag(dvals)) # d ∊ R^(l x l)
+    D: dia_matrix = sparse.dia_matrix(np.diag(Dvals)) # D ∊ R^(n x n)
+    d: dia_matrix = sparse.dia_matrix(np.diag(dvals)) # d ∊ R^(l x l)
 
-    C: np.ndarray = sparse.csc_matrix(np.eye(n,l)) - h * D@A@d # C ∊ R^(n x l), not sparse
+    C: np.ndarray = sparse.dia_matrix(np.eye(n,l)) - h * D@A@d # C ∊ R^(n x l), not sparse
     W: np.ndarray = C[col_idxs,:] # W ∊ R^(l x l), not sparse
     EW, UW = nla.eig(W) # EW ∊ R^(l x l), UW ∊ R^(l x l)
     
     r_idxs: np.ndarray = np.argsort(EW)[:r]
     UWr: dia_matrix = sparse.dia_matrix(UW[:, r_idxs]) # UWr ∊ R^(l x r)
-    EWr: csc_matrix = sparse.csc_matrix(np.diag(EW[r_idxs])) # EWr ∊ R^(r x r)
+    EWr: dia_matrix = sparse.dia_matrix(np.diag(EW[r_idxs])) # EWr ∊ R^(r x r)
 
     Ut: np.ndarray = h * C@UWr@ssl.inv(EWr) # Ut ∊ R^(n x r)
     u = np.real(nla.svd(Ut)[0]) # vh ∊ R^(n x k) --> k SMALLEST *unitary* eigenvectors
-    Y: np.ndarray = u[:,:k]
+    Y = u[:,:k]
     
     #print(A.shape, D.shape, d.shape, C.shape, W.shape, UWr.shape, EWr.shape, Ut.shape, vh.shape)
     # exit("\n\t========< EXIT >========\n")
 
     if action.lower() == "f" and clf is None:
-        return MBK(n_clusters=k,batch_size=300*NUM_CORES,random_state=seed).fit(np.real(Y))
+        return KMeans(n_clusters=k, random_state=seed).fit(np.real(Y))
     elif action.lower() == "p" and clf is not None: 
         return clf.predict(np.real(Y))
     else: exit(f"Invalid action {action}")
@@ -151,7 +160,7 @@ def label_counts(l: np.ndarray)-> np.ndarray:
     return np.asarray(np.unique(l, return_counts=True)).T
 
 
-from sklearn.metrics import accuracy_score, silhouette_score
+from sklearn.metrics import silhouette_score
 
 def cluster0(data: np.ndarray, labels: np.ndarray=None, n_clusters: int=None,
 frac_train: float=0.75, split_seed: int=None, fit_seed: int=None, verbose: bool=True)-> Tuple[np.ndarray, np.ndarray]:
@@ -160,20 +169,20 @@ frac_train: float=0.75, split_seed: int=None, fit_seed: int=None, verbose: bool=
     if n_clusters is None: n_clusters = np.unique(labels).size
 
     if verbose: print("Splitting...")
-    X_train, X_test, _, y_test = train_test_split(data, labels, train_size=frac_train, random_state=split_seed)
+    #X_train, X_test, _, y_test = train_test_split(data, labels, train_size=frac_train, random_state=split_seed)
     if verbose: print("Fitting...")
-    clf = algo0(X_train, n_clusters, action='f', seed=fit_seed)
+    clf = algo0(data, n_clusters, action='f', seed=fit_seed)
     if verbose: print("Predicting...")
-    y_pred: np.ndarray = algo0(X_test, n_clusters, action='p', clf=clf)
-    if verbose: print("TRUE:\n",label_counts(y_test))
-    if verbose: print("PREDICTED:\n",label_counts(y_pred))
+    #y_pred: np.ndarray = algo0(X_test, n_clusters, action='p', clf=clf)
+    # if verbose: print("TRUE:\n",label_counts(y_test))
+    # if verbose: print("PREDICTED:\n",label_counts(y_pred))
     #if verbose: print("Plotting...")
     #plot_clustering(X_test, y_test, predicted_labels)
 
 
-    print('SCORE: ', silhouette_score(X_test, y_pred, metric='euclidean'))
+    print('SCORE: ', silhouette_score(data, clf.labels_, metric='euclidean'))
 
-    return y_test, y_pred
+    return labels, clf.labels_
 
 def cluster1(data: np.ndarray, labels: np.ndarray=None, n_clusters: int=None,
 frac_train: float=0.75, split_seed: int=None, fit_seed: int=None, verbose: bool=True)-> Tuple[np.ndarray, np.ndarray]:
@@ -182,18 +191,18 @@ frac_train: float=0.75, split_seed: int=None, fit_seed: int=None, verbose: bool=
     if n_clusters is None: n_clusters = np.unique(labels).size
 
     if verbose: print("Splitting...")
-    X_train, X_test, _, y_test = train_test_split(data, labels, train_size=frac_train, random_state=split_seed)
+    #X_train, X_test, y_train, y_test = train_test_split(data, labels, train_size=frac_train, random_state=split_seed)
     if verbose: print("Fitting...")
-    clf = algo1(X_train, n_clusters, action='f', style='cho', seed=fit_seed)
+    clf = algo1(data, n_clusters, action='f', style='ng', seed=fit_seed)
     if verbose: print("Predicting...")
-    y_pred: np.ndarray = algo1(X_test, n_clusters, action='p', style='cho', clf=clf)
-    if verbose: print("TRUE:\n",label_counts(y_test))
-    if verbose: print("PREDICTED:\n",label_counts(y_pred))
+    #y_pred: np.ndarray = clf.labels_ # algo1(X_test, n_clusters, action='p', style='cho', clf=clf)
+    # if verbose: print("TRUE:\n",label_counts(data))
+    # if verbose: print("PREDICTED:\n",label_counts(clf.labels_))
     #if verbose: print("Plotting...")
     #plot_clustering(X_test, y_test, predicted_labels)
 
-    print('SCORE: ', silhouette_score(X_test, y_pred, metric='euclidean'))
-    return y_test, y_pred
+    print('SCORE: ', silhouette_score(data, clf.labels_, metric='euclidean'))
+    return labels, clf.labels_
 
 def cluster3(data: np.ndarray, l: int, r: int, labels: np.ndarray=None, n_clusters: int=None,
 frac_train: float=0.75, split_seed: int=None, fit_seed: int=None, verbose: bool=True)-> Tuple[np.ndarray, np.ndarray]:
@@ -202,15 +211,15 @@ frac_train: float=0.75, split_seed: int=None, fit_seed: int=None, verbose: bool=
     if n_clusters is None: n_clusters = np.unique(labels).size
 
     if verbose: print("Splitting...")
-    X_train, X_test, _, y_test = train_test_split(data, labels, train_size=frac_train, random_state=split_seed)
+    #X_train, X_test, y_train, y_test = train_test_split(data, labels, train_size=frac_train, random_state=split_seed)
     if verbose: print("Fitting...")
-    clf = algo3(X_train, l, r, n_clusters, action='f', seed=fit_seed)
+    clf = algo3(data, l, r, n_clusters, action='f', seed=fit_seed)
     if verbose: print("Predicting...")
-    y_pred: np.ndarray = algo3(X_test, l, r, n_clusters, action='p', clf=clf)
-    if verbose: print("TRUE:\n",label_counts(y_test))
-    if verbose: print("PREDICTED:\n",label_counts(y_pred))
+    # y_pred: np.ndarray = clf.labels_ # algo3(X_test, l, r, n_clusters, action='p', clf=clf)
+    # if verbose: print("TRUE:\n", label_counts(labels))
+    # if verbose: print("PREDICTED:\n", label_counts(clf.labels_))
 
-    print('SCORE:', silhouette_score(X_test, y_pred, metric='euclidean'))
-    return y_test, y_pred
+    print('SCORE:', silhouette_score(data, clf.labels_, metric='euclidean'))
+    return labels, clf.labels_
     #print("Plotting...")
     #plot_clustering(X_test, y_test, predicted_labels)

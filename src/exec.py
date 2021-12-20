@@ -122,6 +122,9 @@ if __name__ == "__main__":
     print('\tLoading MNIST...')
     mnist_bunch: Bunch = fetch_openml(name='mnist_784', version='1')
     data, true_labels = [mnist_bunch[c].to_numpy(dtype=int, na_value=0) for c in ['data', 'target']] # data.shape == (70000, 784)
+    
+    data /= 255
+    
     print('\tTraining')
     training_data, training_idxs = sample(data, sample_size=20000, seed=17)
     testing_mask = np.ones(data.shape[0], dtype=bool)
@@ -136,12 +139,11 @@ if __name__ == "__main__":
     testing_data = data[test_grid]
     testing_labels, nbins = true_labels[testing_mask].flatten(), 10
     
-    #testing_data, testing_labels = data, true_labels
+    # testing_data, testing_labels = data, true_labels
 
     nbins = 10
     from test__algos import *
 
-    testing_data = testing_data / 255
     # for n in [500, 1000, 2000]:
     #     test_sample, sample_idxs = sample(testing_data, sample_size=n, seed=17)
     #     print(f'\tClustering MNIST w/ {n}...')
@@ -151,24 +153,24 @@ if __name__ == "__main__":
     #     tock  = timer()
     #     print(f"NYSTROM w/ {pred_labels.shape} COMPLETED IN {dur(tick, tock).seconds} SECONDS")
 
-    for n in [2500, 5000, 7500, 10000]:
+    for n in range():
         test_sample, sample_idxs = sample(testing_data, sample_size=n, seed=19)
         print(f'\tClustering MNIST w/ {n}...')
         tick = timer()
 
-        # print("\t\tZERO")
+        print("\t\tZERO")
 
-        # cluster_test_labels, pred_labels = cluster0(test_sample, testing_labels[sample_idxs],
-        #                                  nbins, frac_train=0.75, split_seed=42, fit_seed=17)
-
-        print("\t\tONE")
-
-        cluster_test_labels, pred_labels = cluster1(test_sample, testing_labels[sample_idxs],
+        cluster_test_labels, pred_labels = cluster0(test_sample, testing_labels[sample_idxs],
                                          nbins, frac_train=0.75, split_seed=42, fit_seed=17)
+
+        # print("\t\tONE")
+
+        # cluster_test_labels, pred_labels = cluster1(test_sample, testing_labels[sample_idxs],
+        #                                  nbins, frac_train=0.75, split_seed=42, fit_seed=17)
 
         print("\t\tTHREE")
 
-        cluster_test_labels, pred_labels = cluster3(test_sample, n//10, n//10, testing_labels[sample_idxs],
+        cluster_test_labels, pred_labels = cluster3(test_sample, n//5, n//5, testing_labels[sample_idxs],
                                             nbins, frac_train=0.75, split_seed=71, fit_seed=17, verbose=True)
         tock  = timer()
         print(f"NYSTROM w/ {pred_labels.shape} COMPLETED IN {dur(tick, tock).seconds} SECONDS")

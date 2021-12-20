@@ -192,20 +192,26 @@ def load_sample_data(name: str, subsample: int=None)-> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-        data = load_sample_data("cali", subsample=5000)
+        data = load_sample_data("cali", subsample=1000)
+        #data = load_sample_data("circ")
 
+        from OTHER import Nystrom
+
+        # model = Nystrom(data["n_clusters"], 100) # k, l
+        # model.fit(np.concatenate((data["data"], data["labels"][:,np.newaxis]), axis=1))
+        # print(model._centroids)
+        # accuracy = model.accuracy(data["labels"])
+        # print('--->', accuracy)
         import test__algos
 
+
+        # test__algos.cluster0(data["data"], data["labels"], data["n_clusters"],
+        #         frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+
         # test__algos.cluster1(data["data"], data["labels"], data["n_clusters"],
-        #                      frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
+        #         frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
 
-        test__algos.cluster0(data["data"], data["labels"], data["n_clusters"],
-                frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
-
-        test__algos.cluster1(data["data"], data["labels"], data["n_clusters"],
-                frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
-
-        test__algos.cluster3(data["data"], 500, 500, data["labels"], data["n_clusters"],
+        test__algos.cluster3(data["data"], 6, 6, data["labels"], data["n_clusters"],
                 frac_train=0.75, split_seed=42, fit_seed=17, verbose=True)
 
         # predicted_labels = ng_nystrom(data["data"], data["n_clusters"])
