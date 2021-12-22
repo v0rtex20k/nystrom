@@ -44,61 +44,16 @@ def load_sample_data(name: str, subsample: int=None)-> Dict[str, Any]:
 dur = lambda a,b: timedelta(seconds=b - a).seconds
 if __name__ == "__main__":
         os.system('clear')
-        data = load_sample_data("circ")
+        data = load_sample_data("cali", subsample=5000)
 
-        # print("\tStarting 0..."); t0 = timer()
-        # pred0, score0 = cluster0(data["data"], data["labels"], data["n_clusters"], fit_seed=17, score_seed=71)
-        # print("\tStarting 1..."); t1 = timer()
-        # pred1, score1, size = cluster1(data["data"], data["labels"], data["n_clusters"], fit_seed=17, score_seed=71)
-        # print("\tStarting 3..."); t3 = timer()
-        # pred3, score3 = cluster3(data["data"], data["n_clusters"], data["n_clusters"], data["labels"], data["n_clusters"], fit_seed=17, score_seed=71)
-        # fin = timer()
-        # print(f"ZERO:  {r3(score0)} ({dur(t0,t1)}) " + \
-        #       f"ONE:   {r3(score1)} ({dur(t1,t3)}) " + \
-        #       f"THREE  {r3(score3)} ({dur(t3,fin)}) " + \
-        #       f"RATIO: {r3(score3/score0)}")
-
-        seed(42)
-        results03 = dict()
-        test_data, test_labels, nbins = data["data"], data["labels"], data["n_clusters"]
-        MAX_ITER = 9
-
-        sizes = dict()
-        results03 = dict()
-        for n in range(1,MAX_ITER+1):
-            s: int = n*20
-            s_idxs = choice(test_data.shape[0], s, replace=False)
-            s_data, s_labels = test_data[s_idxs], test_labels[s_idxs]
-            print(f'\tClustering w/ {n*500}...')
-
-            print("\t\tStarting 0..."); t0 = timer()
-            pred0, score0, size0 = cluster0(s_data, s_labels, nbins, 17, 71)
-            t1 = timer()
-            print("\t\tStarting 3..."); t3 = timer()
-            pred3, score3, size3 = cluster3(s_data, nbins, nbins, s_labels, nbins, 17, 71); fin = timer()
-            #sizes[s] = size0
-            results03[s] = {'a0': (r3(score0), dur(t0,t1)), 'a3': (r3(score3), dur(t3,fin)), 'r': r3(score3/score0)}
-
-        with open('circ__03__.txt', 'w') as fptr:
-            json.dump(results03, fptr)
-
-        # with open('cali_pineapple__0__.json', 'w') as fptr:
-        #     json.dump(sizes, fptr)
-        exit()
-        print("\n DUMPED ---> SWITCHING TO ONE  ... \n")
-
-        results1 = dict()
-        try:
-            for n in range(13,16):
-                s: int = n*500
-                s_idxs = choice(test_data.shape[0], s, replace=False)
-                s_data, s_labels = test_data[s_idxs], test_labels[s_idxs]
-                print(f"\t\tStarting 1... w/ {s}"); t1 = timer()
-                pred1, score1, size = cluster1(s_data, s_labels, nbins, 17, 71); fin = timer()
-                
-                results1[s] = {'a1': (r3(score1), dur(t1, fin), size)}
-                print(f'\t\t[{s}]: {(r3(score1), dur(t1, fin), size)}')
-        except: print("Something exploded...")
-        finally:
-            with open('cali_justice__1__.txt', 'w') as fptr:
-                json.dump(results1, fptr)
+        print("\tStarting 0..."); t0 = timer()
+        pred0, score0 = cluster0(data["data"], data["labels"], data["n_clusters"], fit_seed=17, score_seed=71)
+        print("\tStarting 1..."); t1 = timer()
+        pred1, score1, size = cluster1(data["data"], data["labels"], data["n_clusters"], fit_seed=17, score_seed=71)
+        print("\tStarting 3..."); t3 = timer()
+        pred3, score3 = cluster3(data["data"], data["n_clusters"], data["n_clusters"], data["labels"], data["n_clusters"], fit_seed=17, score_seed=71)
+        fin = timer()
+        print(f"ZERO:  {r3(score0)} ({dur(t0,t1)}) " + \
+              f"ONE:   {r3(score1)} ({dur(t1,t3)}) " + \
+              f"THREE  {r3(score3)} ({dur(t3,fin)}) " + \
+              f"RATIO: {r3(score3/score0)}")
